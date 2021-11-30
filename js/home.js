@@ -1,73 +1,52 @@
 import postApi from './api/postApi'
-import { abc, setTextContent, trumcateText } from './ultis'
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
+import { initPagination, initSearch, renderPostList, renderPagination } from './ultis'
 
-dayjs.extend(relativeTime)
+async function handleFilterChange(filterName, filterValue) {
+  try {
+    //update query params
+    const url = new URL(window.location)
+    url.searchParams.set(filterName, filterValue)
 
-function createPostElement(post) {
-  if (!post) return
+    //reset page if needed
+    if (filterName === 'title_like') url.searchParams.set('_page', 1)
 
-  //find and clone template
-  const postTemplate = document.getElementById('postTemplate')
-  if (!postTemplate) return
+    history.pushState({}, '', url)
 
-  const liElement = postTemplate.content.firstElementChild.cloneNode(true)
-  if (!liElement) return
-
-  // update title, description, author, thumbnail
-  /* const titleElement = liElement.querySelector('[data-id="title"]')
-  if (titleElement) titleElement.textContent = post.title */
-  setTextContent(liElement, '[data-id="title"]', post.title)
-  setTextContent(liElement, '[data-id="description"]', trumcateText(post.description, 100))
-  setTextContent(liElement, '[data-id="author"]', post.author)
-
-  /* const descriptionElement = liElement.querySelector('[data-id="description"]')
-  if (descriptionElement) descriptionElement.textContent = post.description
-
-  const authorElement = liElement.querySelector('[data-id="author"]')
-  if (authorElement) authorElement.textContent = post.author */
-  //calculate time spend
-
-  /*  console.log('time span', dayjs(post.updateAt).fromNow()) */
-  setTextContent(liElement, '[data-id="timeSpan"]', `- ${dayjs(post.updateAt).fromNow()}`)
-
-  const thumbnailElement = liElement.querySelector('[data-id="thumbnail"]')
-  if (thumbnailElement) {
-    thumbnailElement.src = post.imageUrl
-
-    thumbnailElement.addEventListener('error', () => {
-      console.log('load image error -> use default placeholder')
-      thumbnailElement.src = 'https://via.placeholder.com/1368x400?text=thumbnail'
-    })
+    const { data, pagination } = await postApi.getAll(url.searchParams)
+    renderPostList('postList', data)
+    renderPagination('pagination', pagination)
+  } catch (error) {
+    console.log('failed to fetch post list', error)
   }
-
-  //attach events
-
-  return liElement
 }
 
-function renderPostList(postList) {
-  if (!Array.isArray(postList) || postList.length === 0) return
-
-  const ulElement = document.getElementById('postsList')
-  if (!ulElement) return
-
-  postList.forEach((post) => {
-    const liElement = createPostElement(post)
-    ulElement.appendChild(liElement)
-  })
-}
-
+//MAIN
 ;(async () => {
   try {
-    const queryParams = {
-      _page: 1,
-      _limit: 6,
-    }
+    const url = new URL(window.location)
+
+    //update search params if needed
+    if (!url.searchParams.get('_page')) url.searchParams.set('_page', 1)
+    if (!url.searchParams.get('_limit')) url.searchParams.set('_limit', 6)
+
+    history.pushState({}, '', url)
+    const queryParams = url.searchParams
+
+    initPagination({
+      elementId: 'pagination',
+      defaultParams: queryParams,
+      onChange: (page) => handleFilterChange('_page', page),
+    })
+
+    initSearch({
+      elementId: 'searchInput',
+      defaultParams: queryParams,
+      onChange: (value) => handleFilterChange('title_like', value),
+    })
 
     const { data, pagination } = await postApi.getAll(queryParams)
-    renderPostList(data)
+    renderPostList('postList', data)
+    renderPagination('pagination', pagination)
   } catch (error) {
     console.log('get all failed', error)
     //show modal, toast error
